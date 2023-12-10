@@ -14,6 +14,8 @@ SPEECH_REGION = os.environ.get("SPEECH_REGION")
 
 punctuations = ["。", "？ ", "！ ", "！", "？"]
 
+# 発音評価有無
+DO_PRONUNCIATION_ASSESSMENT = False
 
 def main():
     # 会話セッションを保持
@@ -30,17 +32,19 @@ def main():
     # 音声認識器を作成
     speech_recognizer = speechsdk.SpeechRecognizer(speech_config=speech_config, audio_config=audio_config)
     # 発話の評価を有効にする
-    pronunciation_config = speechsdk.PronunciationAssessmentConfig(
-        reference_text="",
-        grading_system=speechsdk.PronunciationAssessmentGradingSystem.HundredMark,
-        granularity=speechsdk.PronunciationAssessmentGranularity.Phoneme,
-        enable_miscue=False)
-    pronunciation_config.enable_prosody_assessment()
-    pronunciation_config.apply_to(speech_recognizer)
+    if DO_PRONUNCIATION_ASSESSMENT:
+        pronunciation_config = speechsdk.PronunciationAssessmentConfig(
+            reference_text="",
+            grading_system=speechsdk.PronunciationAssessmentGradingSystem.HundredMark,
+            granularity=speechsdk.PronunciationAssessmentGranularity.Phoneme,
+            enable_miscue=False)
+        pronunciation_config.enable_prosody_assessment()
+        pronunciation_config.apply_to(speech_recognizer)
 
     while True:
         # 認識結果を取得
         user_message = None
+        score = None
 
         # # キーボード入力版
         # user_message = input('user : ')
@@ -50,11 +54,12 @@ def main():
         result = speech_recognizer.recognize_once()
 
         if result.reason == speechsdk.ResultReason.RecognizedSpeech:  # 認識成功時
-            # 評価結果を取得
-            pronunciation_assessment_result = speechsdk.PronunciationAssessmentResult(result)
             # 結果テキストを取得
             user_message = result.text
-            score = pronunciation_assessment_result.accuracy_score
+            # 評価結果を取得
+            if DO_PRONUNCIATION_ASSESSMENT:
+                pronunciation_assessment_result = speechsdk.PronunciationAssessmentResult(result)
+                score = pronunciation_assessment_result.accuracy_score
         elif result.reason == speechsdk.ResultReason.NoMatch:
             print("No speech could be recognized: {}".format(result.no_match_details))
         elif result.reason == speechsdk.ResultReason.Canceled:
@@ -73,7 +78,7 @@ def on_new_user_message(messages, new_user_message: str, score):
     # ユーザの発話を追加して、OpenAIに送信
     messages.append({"role": "user", "content": new_user_message})
     # 精度が悪いときはsystemに注釈させる
-    if score < 80:
+    if score and score < 80:
         messages.append({
             "role": "system",
             "content": f"[assistant向けの補足情報] 上記のuser発話の認識率は{score}%でした。"
@@ -119,19 +124,19 @@ def say(text: str):
 
 if __name__ == "__main__":
     tts = sys.argv[1] if len(sys.argv) > 1 else 'openai'
-    if tts == 'openai': # 速度も読み仮名解釈も中くらい。英語話者っぽいイントネーション。
+    if tts == 'openai':
         from text2openai import say as _say
         tts = _say
-    elif tts == 'voicepeak': # 遅い。読み仮名解釈は中くらい。
+    elif tts == 'voicepeak':
         from text2voicepeak import say as _say
         tts = _say
-    elif tts == 'pyttsx3': # 最高速。読み仮名が解釈が微妙。
+    elif tts == 'pyttsx3':
         from text2pyttsx3 import say as _say
         tts = _say
-    elif tts == 'voiceroid': # 速度も読み仮名解釈も中くらい。
+    elif tts == 'voiceroid':
         from text2voiceroid import say as _say
         tts = _say
     else:
-        raise Exception('invalid tts')
+        raise Exception(f'invalid tts "{tts}". valid values are "openai", "voicepeak", "pyttsx3", "voiceroid".')
 
     main()
