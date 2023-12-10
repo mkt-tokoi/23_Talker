@@ -1,0 +1,24 @@
+[tool.poetry]
+name = "23-talker"
+version = "0.1.0"
+description = ""
+authors = ["tokoi <mkt.tokoi@gmail.com>"]
+readme = "README.md"
+packages = [{include = "23_talker"}]
+
+[tool.poetry.dependencies]
+python = "^3.11"
+azure-cognitiveservices-speech = "^1.33.0"
+openai = "^1.3.5"
+soundfile = "^0.12.1"
+simpleaudio = "^1.0.4"
+sounddevice = "^0.4.6"
+numpy = "^1.26.2"
+pyttsx3 = "^2.90"
+pygame = "^2.5.2"
+requests = "^2.31.0"
+
+
+[build-system]
+requires = ["poetry-core"]
+build-backend = "poetry.core.masonry.api"
