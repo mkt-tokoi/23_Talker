@@ -29,6 +29,14 @@ def main():
 
     # 音声認識器を作成
     speech_recognizer = speechsdk.SpeechRecognizer(speech_config=speech_config, audio_config=audio_config)
+    # 発話の評価を有効にする
+    pronunciation_config = speechsdk.PronunciationAssessmentConfig(
+        reference_text="",
+        grading_system=speechsdk.PronunciationAssessmentGradingSystem.HundredMark,
+        granularity=speechsdk.PronunciationAssessmentGranularity.Phoneme,
+        enable_miscue=False)
+    pronunciation_config.enable_prosody_assessment()
+    pronunciation_config.apply_to(speech_recognizer)
 
     while True:
         # 認識結果を取得
@@ -40,8 +48,13 @@ def main():
         # 音声入力版
         print("(Please speak something ...)")
         result = speech_recognizer.recognize_once()
-        if result.reason == speechsdk.ResultReason.RecognizedSpeech:
+
+        if result.reason == speechsdk.ResultReason.RecognizedSpeech:  # 認識成功時
+            # 評価結果を取得
+            pronunciation_assessment_result = speechsdk.PronunciationAssessmentResult(result)
+            # 結果テキストを取得
             user_message = result.text
+            score = pronunciation_assessment_result.accuracy_score
         elif result.reason == speechsdk.ResultReason.NoMatch:
             print("No speech could be recognized: {}".format(result.no_match_details))
         elif result.reason == speechsdk.ResultReason.Canceled:
@@ -52,13 +65,20 @@ def main():
 
         # 認識成功時、AIに送信
         if user_message:
-            on_new_user_message(messages, user_message)
+            on_new_user_message(messages, user_message, score)
 
 
-def on_new_user_message(messages, new_user_message: str):
-    print(f'user : {new_user_message}')
+def on_new_user_message(messages, new_user_message: str, score):
+    print(f'user : {new_user_message} (認識率:{score}%)')
     # ユーザの発話を追加して、OpenAIに送信
     messages.append({"role": "user", "content": new_user_message})
+    # 精度が悪いときはsystemに注釈させる
+    if score < 80:
+        messages.append({
+            "role": "system",
+            "content": f"[assistant向けの補足情報] 上記のuser発話の認識率は{score}%でした。"
+                       f"userが実際に発話した内容と異なっている可能性に留意してください。"
+        })
     # OpenAIに送信
     chat_stream = openai_client.chat.completions.create(model="gpt-4-1106-preview",
                                                         messages=messages,
